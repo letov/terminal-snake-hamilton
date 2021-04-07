@@ -43,14 +43,14 @@ data World = World  { snake :: Snake
 -- inits
 
 initWorld :: UTCTime -> World
-initWorld timePoint = World   { snake = [(4, y) | y <- [5..7]]
+initWorld timePoint = World   { snake = [(10, y) | y <- [3..10]] ++ [(11,10),(12,10)]
                               , oldLast = (0, 0)
                               , direction = DirRight
-                              , fruit = (5, 5)
+                              , fruit = (3, 2)
                               , lastRenderTime = timePoint
                               , renderDelay = 0.3
                               , isRenderIteration = True
-                              , worldState = Process
+                              , worldState = Hamilton
                               , rand = mkStdGen 0
                               , hamPath = getHamPath wallsFirstPoint []
                               }                          
@@ -131,7 +131,7 @@ moveController world
   | otherwise                                         = world { snake = snakeStep botStepDir (snake world)
                                                               , hamPath = if botPathDir == DirFromTail then hamPath world else reverse $ hamPath world  
                                                               } where 
-                                                                  (botStepDir, botPathDir) = nextBotDir (snake world) (fruit world) (hamPath world) 
+                                                                  (botStepDir, botPathDir) = nextDirBot (snake world) (fruit world) (hamPath world) 
 
 collisionController :: World -> World
 collisionController world
@@ -188,7 +188,7 @@ drawWalls char ((x1, y1),(x2, y2)) = do
   menuStr "q - Quit" 10 initWalls
 
 updateStatus :: World -> IO ()
-updateStatus world                      | not $ isRenderIteration world = return ()
+updateStatus world                    | not $ isRenderIteration world = return ()
                                       | otherwise = do 
                                           menuStr ("snake length: " ++ (show (length $ snake world))) 1 initWalls
                                           if worldState world == Hamilton then do 
@@ -199,7 +199,7 @@ updateStatus world                      | not $ isRenderIteration world = return
 -- loops
                                               
 gameLoop :: ThreadId -> MVar Char -> World -> IO ()
-gameLoop hInput input oldWorld = do
+gameLoop inputThId input oldWorld = do
   tryInput <- tryTakeMVar input
   timePoint <- getCurrentTime
   let newWorld = collisionController . moveController $ timerController timePoint (inputController tryInput oldWorld) 
@@ -208,27 +208,27 @@ gameLoop hInput input oldWorld = do
     GameOver -> do
       clearScreen 
       drawWalls '#' initWalls
-      gameLoop hInput input (initWorld timePoint)
-    Quit     -> killThread hInput
-    _        -> gameLoop hInput input newWorld { isRenderIteration = False }  
+      gameLoop inputThId input (initWorld timePoint)
+    Quit     -> killThread inputThId
+    _        -> gameLoop inputThId input newWorld { isRenderIteration = False }  
 
 inputLoop :: MVar Char -> IO ()
 inputLoop input = (putMVar input =<< getChar) >> inputLoop input 
 
 -- game bot
 
-nextBotDir :: Snake -> Point -> ClosedPath -> (StepDirection, PathDirection)
-nextBotDir snake fruit path | distBypass1 < distBypass2 && distBypass1 < distToFruit 
-                              && not (collisionSnakeOnPath snake virtualBypassPoint path DirFromTail) 
-                                = (dirBetweenPoints (head snake) virtualBypassPoint, DirFromTail)
-                            | distBypass2 < distToFruit 
-                              && not (collisionSnakeOnPath snake virtualBypassPoint path DirFromHead) 
-                                = (dirBetweenPoints (head snake) virtualBypassPoint, DirFromHead) 
+nextDirBot :: Snake -> Point -> ClosedPath -> (StepDirection, PathDirection)
+nextDirBot snake fruit path | distBypass1 < distBypass2 && distBypass1 < distToFruit1 
+                              && not (collisionSnakeOnPath snake enterPointBypass path DirFromTail) 
+                                = (dirBetweenPoints (head snake) enterPointBypass, DirFromTail)
+                            | distBypass2 < distToFruit1 
+                              && not (collisionSnakeOnPath snake enterPointBypass path DirFromHead) 
+                                = (dirBetweenPoints (head snake) enterPointBypass, DirFromHead) 
                             | otherwise = nextDirOnPath snake path where
-  bypassDir = dirBetweenPoints (head snake) fruit
-  virtualBypassPoint = pointStep bypassDir (head snake)
-  (distBypass1, distBypass2) = distBetweenPointsOnPath virtualBypassPoint fruit path
-  (distToFruit, _) = distBetweenPointsOnPath (head snake) fruit path
+  dirBypass = dirBetweenPoints (head snake) fruit
+  enterPointBypass = pointStep dirBypass (head snake)
+  (distBypass1, distBypass2) = distBetweenPointsOnPath enterPointBypass fruit path
+  (distToFruit1, _) = distBetweenPointsOnPath (head snake) fruit path
 
 collisionSnakeOnPath :: Snake -> Point -> ClosedPath -> PathDirection -> Bool
 collisionSnakeOnPath snake point path pathDir | null $ common snake pathPart = False
@@ -240,6 +240,9 @@ collisionSnakeOnPath snake point path pathDir | null $ common snake pathPart = F
     _takePathPart _     []     _    = []
     _takePathPart point (x:xs) len  | x == point = x:(take (len - 1) xs)
                                     | otherwise = _takePathPart point xs len
+
+distBetweenPoints :: Point -> Point -> Int
+distBetweenPoints (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2)
 
 distBetweenPointsOnPath :: Point -> Point -> ClosedPath -> (Int, Int)
 distBetweenPointsOnPath point1 point2 path  | id1 < id2 = (length path - id2 + id1,id2 - id1)
@@ -277,7 +280,6 @@ getHamPath currentPoint hamPath  | hamPathCapacity initWalls == length (currentP
                                  | otherwise = getHamPath newPoint (currentPoint:hamPath) where
                                     newPoint = nextHamPathPoint (currentPoint:hamPath) clockwise
                                     hamPathCapacity ((x1, y1),(x2, y2)) = (x2 - x1 - 1) * (y2 - y1 - 1) 
-                                    distBetweenPoints (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2)
 
 nextHamPathPoint :: Path -> [StepDirection] -> Point
 nextHamPathPoint _       []         = error "incorrect initWalls"
@@ -293,7 +295,7 @@ main = do
   hSetEcho stdin False
   clearScreen
   input <- newEmptyMVar
-  hInput <- forkIO $ inputLoop input
+  inputThId <- forkIO $ inputLoop input
   timePoint <- getCurrentTime
   drawWalls '#' initWalls
-  gameLoop hInput input (initWorld timePoint)
+  gameLoop inputThId input (initWorld timePoint)
