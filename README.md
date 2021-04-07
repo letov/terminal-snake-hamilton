@@ -11,10 +11,10 @@ cabal install
 ## usage
 ./dist/build/terminal-snake-hamilton/terminal-snake-hamilton
 
-w - Up
-s - Down
-a - Left
-d - Right
-hold - speed boost
-h - Hamilton mode
-q - Quit
+* w - Up
+* s - Down
+* a - Left
+* d - Right
+* hold - speed boost
+* h - Hamilton mode
+* q - Quit
