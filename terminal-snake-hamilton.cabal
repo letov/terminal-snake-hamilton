@@ -25,6 +25,7 @@ executable terminal-snake-hamilton
   default-language:    Haskell2010
   ghc-options:         -main-is Snake
 
+-- rename main -> main' for tests
 --test-suite test-terminal-snake-hamilton
 --  main-is:             SnakeTest.hs
 --  other-modules:       Snake
