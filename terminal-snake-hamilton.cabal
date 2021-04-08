@@ -26,7 +26,7 @@ executable terminal-snake-hamilton
   ghc-options:         -main-is Snake
 
 -- rename main -> main' for tests
---test-suite test-terminal-snake-hamilton
+-- test-suite test-terminal-snake-hamilton
 --  main-is:             SnakeTest.hs
 --  other-modules:       Snake
 --  build-depends:       base >=4.12 && <4.13,

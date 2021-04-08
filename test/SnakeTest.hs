@@ -25,6 +25,7 @@ main = do
   TestCase $ assertEqual "   !!!" (8, 8) (distBetweenPointsOnPath (5,3) (3,5) hamPathReference), 
   TestCase $ assertEqual "   !!!" (11, 5) (distBetweenPointsOnPath (5,2) (2,4) hamPathReference), 
   TestCase $ assertEqual "   !!!" (11, 5) (distBetweenPointsOnPath (5,2) (2,4) hamPathReference), 
+  TestCase $ assertEqual "   !!!" (0, 0) (distBetweenPointsOnPath (5,2) (5,2) hamPathReference), 
   TestCase $ assertEqual "   !!!" (DirRight) (dirBetweenPoints (0,0) (2,4)), 
   TestCase $ assertEqual "   !!!" (DirDown) (dirBetweenPoints (0,0) (4,2)), 
   -- 
@@ -34,8 +35,8 @@ main = do
   TestCase $ assertEqual "   !!!" (2,14) (distBetweenPointsOnPath (3,5) (2,4) hamPathReference),
   TestCase $ assertEqual "   !!!" (True) (collisionSnakeOnPath [(2,3),(2,4)] (2,2) hamPathReference DirFromHead),
   TestCase $ assertEqual "   !!!" (False) (collisionSnakeOnPath [(4,4),(4,5)] (5,5) hamPathReference DirFromHead),
-  TestCase $ assertEqual "   !!!" (DirLeft,DirFromTail) (nextBotDir [(3,3),(4,3),(5,3),(5,4),(5,5)] (2,3) hamPathReference),
-  TestCase $ assertEqual "   !!!" (DirLeft,DirFromTail) (nextBotDir [(5,5),(5,4),(5,3)] (2,2) hamPathReference),
+  TestCase $ assertEqual "   !!!" (DirLeft,DirFromTail) (nextDirBot [(3,3),(4,3),(5,3),(5,4),(5,5)] (2,3) hamPathReference),
+  TestCase $ assertEqual "   !!!" (DirLeft,DirFromTail) (nextDirBot [(5,5),(5,4),(5,3)] (2,2) hamPathReference),
   TestCase $ assertEqual "   !!!" 1 1
   ])
  if (errors counts + failures counts == 0)

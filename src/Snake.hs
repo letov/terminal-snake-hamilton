@@ -4,7 +4,7 @@ import Data.Time.Clock (UTCTime, NominalDiffTime, getCurrentTime, diffUTCTime)
 import Control.Concurrent (MVar, ThreadId, forkIO, killThread, newEmptyMVar, putMVar, tryTakeMVar)
 import System.Console.ANSI (clearScreen, setCursorPosition)
 import System.IO (BufferMode( NoBuffering ), stdin, stdout, hSetEcho, hSetBuffering)
-import System.Random (RandomGen, StdGen, randomR, mkStdGen)
+import System.Random (StdGen, randomR, mkStdGen)
 
 data StepDirection  =  DirUp
                     | DirDown
@@ -26,15 +26,15 @@ type ClosedPath = [Point]
 data WorldState = Process 
                 | GameOver
                 | Quit 
-                | Hamilton deriving (Eq)   
+                | Bot deriving (Eq)   
 
 data World = World  { snake :: Snake
                     , oldLast :: Point
                     , direction :: StepDirection
                     , fruit :: Point
-                    , lastRenderTime :: UTCTime
-                    , renderDelay :: NominalDiffTime
-                    , isRenderIteration :: Bool
+                    , lastUpdateTime :: UTCTime
+                    , updateDelay :: NominalDiffTime
+                    , isUpdateIteration :: Bool
                     , worldState :: WorldState
                     , rand :: StdGen
                     , hamPath :: ClosedPath
@@ -43,14 +43,14 @@ data World = World  { snake :: Snake
 -- inits
 
 initWorld :: UTCTime -> World
-initWorld timePoint = World   { snake = [(10, y) | y <- [3..10]] ++ [(11,10),(12,10)]
+initWorld timePoint = World   { snake = [(10, y) | y <- [3..10]]
                               , oldLast = (0, 0)
                               , direction = DirRight
                               , fruit = (3, 2)
-                              , lastRenderTime = timePoint
-                              , renderDelay = 0.3
-                              , isRenderIteration = True
-                              , worldState = Hamilton
+                              , lastUpdateTime = timePoint
+                              , updateDelay = 0.3
+                              , isUpdateIteration = True
+                              , worldState = Process
                               , rand = mkStdGen 0
                               , hamPath = getHamPath wallsFirstPoint []
                               }                          
@@ -94,39 +94,39 @@ inputController command world = let
                                               | otherwise = dirNew in 
     case command of
     Just 'w' -> world { direction = filterSecondSegmentDir (snake world) (direction world) DirUp 
-                      , renderDelay = boost (direction world) DirUp
+                      , updateDelay = boost (direction world) DirUp
                       , worldState = Process
                       }
     Just 's' -> world { direction = filterSecondSegmentDir (snake world) (direction world) DirDown
-                      , renderDelay = boost (direction world) DirDown
+                      , updateDelay = boost (direction world) DirDown
                       , worldState = Process
                       }
     Just 'a' -> world { direction = filterSecondSegmentDir (snake world) (direction world) DirLeft 
-                      , renderDelay = boost (direction world) DirLeft
+                      , updateDelay = boost (direction world) DirLeft
                       , worldState = Process
                       }
     Just 'd' -> world { direction = filterSecondSegmentDir (snake world) (direction world) DirRight 
-                      , renderDelay = boost (direction world) DirRight
+                      , updateDelay = boost (direction world) DirRight
                       , worldState = Process
                       }
     Just 'q' -> world { worldState = Quit }
-    Just 'h' -> world { worldState = Hamilton
+    Just 'h' -> world { worldState = Bot
                       }
-    _        -> world { renderDelay = if worldState world == Process then 0.3 else 0.05
+    _        -> world { updateDelay = if worldState world == Process then 0.3 else 0.05
                       }
 
 timerController :: UTCTime -> World -> World
 timerController timePoint world
-  | isRenderTime timePoint world                      = world { lastRenderTime = timePoint
-                                                              , isRenderIteration = True 
+  | isUpdateTime timePoint world                      = world { lastUpdateTime = timePoint
+                                                              , isUpdateIteration = True 
                                                               , oldLast = last $ snake world
                                                               }
   | otherwise                                         = world where
-    isRenderTime timePoint world = diffUTCTime timePoint (lastRenderTime world) >= renderDelay world
+    isUpdateTime timePoint world = diffUTCTime timePoint (lastUpdateTime world) >= updateDelay world
 
 moveController :: World -> World
 moveController world 
-  | not $ isRenderIteration world                     = world
+  | not $ isUpdateIteration world                     = world
   | worldState world == Process                       = world { snake = snakeStep (direction world) (snake world) }
   | otherwise                                         = world { snake = snakeStep botStepDir (snake world)
                                                               , hamPath = if botPathDir == DirFromTail then hamPath world else reverse $ hamPath world  
@@ -135,7 +135,7 @@ moveController world
 
 collisionController :: World -> World
 collisionController world
-  | not $ isRenderIteration world = world
+  | not $ isUpdateIteration world = world
   | collisionSnake $ snake world                      = world { worldState = GameOver } 
   | collisionWall (head $ snake world) initWalls      = world { worldState = GameOver } 
   | collisionFruit (snake world) (fruit world)        = world { snake = (snake world) ++ [oldLast world]
@@ -155,9 +155,9 @@ collisionController world
 
 -- graphics
 
-renderWorld :: World ->  MVar Char -> IO ()
-renderWorld world input
-  | not $ isRenderIteration world = return ()
+renderWorld :: World -> IO ()
+renderWorld world
+  | not $ isUpdateIteration world = return ()
   | otherwise = do
     drawPoint '@' (fruit world)  
     drawPoint ' ' (oldLast world)
@@ -184,14 +184,14 @@ drawWalls char ((x1, y1),(x2, y2)) = do
   menuStr "a - Left" 6 initWalls
   menuStr "d - Right" 7 initWalls
   menuStr "hold - speed boost" 8 initWalls
-  menuStr "h - Hamilton mode" 9 initWalls
+  menuStr "h - Bot mode" 9 initWalls
   menuStr "q - Quit" 10 initWalls
 
 updateStatus :: World -> IO ()
-updateStatus world                    | not $ isRenderIteration world = return ()
+updateStatus world                    | not $ isUpdateIteration world = return ()
                                       | otherwise = do 
                                           menuStr ("snake length: " ++ (show (length $ snake world))) 1 initWalls
-                                          if worldState world == Hamilton then do 
+                                          if worldState world == Bot then do 
                                                 menuStr ("game mode:  bot control") 2 initWalls else do 
                                                 menuStr ("game mode: user control") 2 initWalls
                                               
@@ -203,14 +203,14 @@ gameLoop inputThId input oldWorld = do
   tryInput <- tryTakeMVar input
   timePoint <- getCurrentTime
   let newWorld = collisionController . moveController $ timerController timePoint (inputController tryInput oldWorld) 
-  renderWorld newWorld input
+  renderWorld newWorld
   case worldState newWorld of
     GameOver -> do
       clearScreen 
       drawWalls '#' initWalls
       gameLoop inputThId input (initWorld timePoint)
     Quit     -> killThread inputThId
-    _        -> gameLoop inputThId input newWorld { isRenderIteration = False }  
+    _        -> gameLoop inputThId input newWorld { isUpdateIteration = False }  
 
 inputLoop :: MVar Char -> IO ()
 inputLoop input = (putMVar input =<< getChar) >> inputLoop input 
@@ -233,8 +233,7 @@ nextDirBot snake fruit path | distBypass1 < distBypass2 && distBypass1 < distToF
 collisionSnakeOnPath :: Snake -> Point -> ClosedPath -> PathDirection -> Bool
 collisionSnakeOnPath snake point path pathDir | null $ common snake pathPart = False
                                               | otherwise = True where
-  _path = if pathDir == DirFromHead then path else reverse path
-  pathPart = takePathPart point _path (length snake)
+  pathPart = takePathPart point (if pathDir == DirFromHead then path else reverse path) (length snake)
   common xs ys = [ x | x <- xs , y <- ys, x == y]
   takePathPart point path len = _takePathPart point (path ++ (take len path)) len where
     _takePathPart _     []     _    = []
@@ -245,7 +244,8 @@ distBetweenPoints :: Point -> Point -> Int
 distBetweenPoints (x1, y1) (x2, y2) = abs (x1 - x2) + abs (y1 - y2)
 
 distBetweenPointsOnPath :: Point -> Point -> ClosedPath -> (Int, Int)
-distBetweenPointsOnPath point1 point2 path  | id1 < id2 = (length path - id2 + id1,id2 - id1)
+distBetweenPointsOnPath point1 point2 path  | point1 == point2 = (0, 0)
+                                            | id1 < id2 = (length path - id2 + id1,id2 - id1)
                                             | otherwise = (id1 - id2, length path - id1 + id2) where
   (id1,id2) = pointIndexOnPath (point1,point2) path 0 (0,0)
   pointIndexOnPath _               []     _   ids                     = ids
@@ -261,7 +261,7 @@ dirBetweenPoints (x1, y1) (x2, y2)  | x1 == x2 = if y1 > y2 then DirUp else DirD
                                         dirBetweenPoints (0, y1) (0, y2)  
 
 nextDirOnPath :: Snake -> ClosedPath -> (StepDirection, PathDirection)
-nextDirOnPath (snakeHead:snakeTail)  path   | snakeTail == [] = (dirBetweenPoints snakeHead (fst $ pointNeighborsOnPath snakeHead path), DirFromTail) 
+nextDirOnPath (snakeHead:snakeTail)  path   | snakeTail == [] = (dirBetweenPoints snakeHead point1, DirFromTail) 
                                             | point1 == head snakeTail = (dirBetweenPoints snakeHead point2, DirFromHead)
                                             | otherwise = (dirBetweenPoints snakeHead point1, DirFromTail) where 
                                                 (point1, point2) = pointNeighborsOnPath snakeHead path
@@ -291,7 +291,6 @@ nextHamPathPoint hamPath (dir:dirs) | isPathContain hamPath virtualPoint || coll
 
 main = do
   hSetBuffering stdin NoBuffering 
-  hSetBuffering stdout NoBuffering 
   hSetEcho stdin False
   clearScreen
   input <- newEmptyMVar
