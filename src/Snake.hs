@@ -53,7 +53,7 @@ initWorld timePoint = World   { snake = [(10, y) | y <- [3..10]]
                               , worldState = Process
                               , rand = mkStdGen 0
                               , hamPath = getHamPath wallsFirstPoint []
-                              }                          
+                              }                                 
 
 initWalls :: Walls
 initWalls = ((1,1),(20,20))
@@ -138,11 +138,13 @@ collisionController world
   | not $ isUpdateIteration world = world
   | collisionSnake $ snake world                      = world { worldState = GameOver } 
   | collisionWall (head $ snake world) initWalls      = world { worldState = GameOver } 
+  | checkWin (snake world) initWalls                  = world { worldState = GameOver } 
   | collisionFruit (snake world) (fruit world)        = world { snake = (snake world) ++ [oldLast world]
                                                               , fruit = newFruit
                                                               , rand = newRand
                                                               }
   | otherwise                                         = world where
+    checkWin snake ((x1, y1),(x2, y2)) = (x2 - x1 - 1) * (y2 - y1 - 1) - length snake == 1
     collisionFruit snake fruit = fruit == head snake
     (newFruit, newRand) = freeRandomPoint world (rand world)
     randomPoint ((minX, minY), (maxX, maxY)) g = let
