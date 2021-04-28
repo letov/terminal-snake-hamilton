@@ -1,6 +1,7 @@
 # terminal-snake-hamilton
 Terminal snake game with bot mode, based on Hamilton cycle, written in Haskell.
 Not working in Windows console (hSetBuffering stdin NoBuffering).
+https://habr.com/ru/post/551504/
 ## requirements
 * base >=4.12 && <4.13,
 * time >=1.8.0.2,
